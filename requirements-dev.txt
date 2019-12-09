@@ -1,0 +1,7 @@
+-r src/layers/libraries/requirements.txt
+
+boto3
+pylint
+pytest
+pytest-env
+pytest-mock

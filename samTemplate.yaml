@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  lbwf-chatbot
+
+  London Borough of Waltham Forest Chat Bot
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+
+Parameters:
+
+  ProjectName:
+    AllowedPattern: ^[a-zA-Z0-9]*$
+    Description: Name of the project that is prefixed to resource names (lowercase only)
+    Type: String
+    ConstraintDescription: Lowercase only
+
+  APIKey:
+    AllowedPattern: ^[a-zA-Z0-9]*$
+    Description: getaddress.io API Key
+    Type: String
+
+  DefaultRootObject:
+    Description: 'The default path for the index document.'
+    Type: String
+    Default: '/index.html'
+
+  ErrorPagePath:
+    Description: 'The path of the error page for the website.'
+    Type: String
+    Default: '/404.html'
+
+Resources:
+
+  Libraries:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Join [ '-', [ !Ref ProjectName, 'libraries' ] ]
+      Description: Empty lambda so SAM builds the layer
+      CodeUri: ./src/layers/libraries
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Tags:
+        Project: !Ref ProjectName
+
+  LibrariesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: Libraries
+      Description: >-
+        Includes aws-xray-sdk, requests
+      ContentUri: ./.aws-sam/build/Libraries
+      CompatibleRuntimes:
+        - python3.6
+        - python3.7
+      RetentionPolicy: Delete
+    DependsOn:
+      - Libraries
+
+  ChatBotFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      FunctionName: !Join [ '-', [ !Ref ProjectName, 'chatbot' ] ]
+      Description: Lambda used by lex lbwf-chatbot
+      CodeUri: lambda_chatbot/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Layers:
+        - !Ref LibrariesLayer
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          LOGGING: DEBUG
+          GETADDRESS_APIKEY: Y9svZs2PPUqdGDQFCd45cQ20776
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTable
+      Tracing: Active
+      Tags:
+        Project: !Ref ProjectName
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: reference
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: reference
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: lbwf-chatbot
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebsiteCognitoPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Join [ ' ', [ !Ref ProjectName, 'identity pool' ] ]
+      AllowUnauthenticatedIdentities: True
+
+  WebsiteCognitoRoleMapping:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref WebsiteCognitoPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthenticatedRole.Arn
+        unauthenticated: !GetAtt CognitoUnAuthenticatedRole.Arn
+
+  CognitoAuthenticatedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lex.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonLexRunBotsOnly
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  CognitoUnAuthenticatedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lex.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonLexRunBotsOnly
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebsiteS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join [ '-', [ !Ref ProjectName, 'website' ] ]
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # WebsiteS3BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref WebsiteS3Bucket
+  #     PolicyDocument:
+  #       Statement:
+  #         -
+  #           Action:
+  #             - s3:GetObject
+  #           Effect: Allow
+  #           Resource: !Join [ "", [ "arn:aws:s3:::", !Ref WebsiteS3Bucket, "/*" ] ]
+  #           Principal: "*"
+
+  # WebsiteCloudFront
+
+  # WebsiteDomain
+
+Outputs:
+
+  WebsiteCognitoPoolId:
+    Description: ChatBot Identity Pool Id
+    Value: !Ref WebsiteCognitoPool
+    Export:
+      Name: !Join [ '-', [ !Ref ProjectName, 'identity' ] ]

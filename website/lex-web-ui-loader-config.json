@@ -1,0 +1,37 @@
+{
+  "cognito": {
+    "poolId": "eu-west-1:a54651d2-da91-4ec7-afa4-4ad3779bafb6",
+    "appUserPoolClientId": "",
+    "appUserPoolName": "",
+    "appDomainName": "",
+    "appUserPoolIdentityProvider": ""
+  },
+  "lex": {
+    "botName": "LBWFChatBot",
+    "botAlias": "$LATEST",
+    "initialText": "You can use me to report anti social behaviour. Just type \"Report anti-social behaviour\" or click on the mic and say it.",
+    "initialSpeechInstruction": "Say 'Report anti-social behaviour' to get started.",
+    "reInitSessionAttributesOnRestart": false
+  },
+  "ui": {
+    "parentOrigin": "",
+    "toolbarTitle": "LBWF - Report anti-social behaviour",
+    "toolbarLogo": "",
+    "enableLogin": false,
+    "AllowSuperDangerousHTMLInMessage": false,
+    "shouldDisplayResponseCardTitle": false,
+    "pushInitialTextOnRestart": false,
+    "directFocusToBotInput": false
+  },
+  "polly": {
+    "voiceId": "Salli"
+  },
+  "recorder": {
+    "preset": "speech_recognition"
+  },
+  "iframe": {
+    "iframeOrigin": "",
+    "shouldLoadIframeMinimized": false,
+    "iframeSrcPath": "/index.html#/?lexWebUiEmbed=true"
+  }
+}
